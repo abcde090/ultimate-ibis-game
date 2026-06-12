@@ -1,56 +1,76 @@
 # Bin Chicken 🦩🗑️
 
-**An Ibis Mischief Game** — in the spirit of *Untitled Goose Game*, starring
-Australia's most majestic menace: the Australian White Ibis.
+**An Ibis Mischief Game.** It is a lovely morning in Maggee Bay Reserve, and
+you are a horrible ibis.
 
-It is a lovely morning in the park, and you are a horrible ibis. Waddle around
-a sunny Australian park, squawk at the locals, raid the bins, steal a snag off
-the barbie, and work your way through the to-do list. Finish every job to
-unlock the final heist: the **Golden Chip**.
+In the spirit of *Untitled Goose Game*: waddle through a seaside Australian
+park causing finely-curated chaos. Five districts — the Park Lawn, the Cafe
+Strip, the Market Stalls, the Foreshore, and the Cricket Oval — each with a
+to-do list of mischief. Finish a district's list and the next gate opens.
+Finish them all and one prize remains: **the Golden Chip**.
 
 ## Play
 
-Any static file server works — no build step, no dependencies:
-
 ```bash
-npm start            # serves on http://localhost:8123
-# or: python3 -m http.server 8123
+npm install
+npm run bake     # generate atlas + map (committed output, only needed after art/layout changes)
+npm run dev      # http://localhost:8124
 ```
 
-### Controls
+Production build (itch.io-ready zip):
 
-| Key | Action |
+```bash
+npm run build    # → dist/ (relative paths, drop onto any static host)
+```
+
+### Controls (remappable in-game)
+
+| Input | Action |
 |---|---|
-| WASD / Arrow keys | Waddle |
-| Shift (hold) | Sprint |
-| Space | Squawk |
-| E | Grab / drop / peck bins over |
+| WASD / Arrows / left stick | Waddle |
+| Shift / RT | Sprint — outruns humans, **not dogs** |
+| Space / A | Squawk (hold for a long blast — scatters seagulls) |
+| E / B | Grab · drop · peck bins · drag heavy things |
+| F / Y | Flap-hop fences — **drops whatever you're carrying** |
+| Esc / Start | Pause, settings, volumes |
 
-### Tips from one bin chicken to another
+### Field notes from one bin chicken to another
 
-- Humans chase you when you nick their stuff — sprint, or wade into the pond.
-  **Humans never enter the pond.** Anything you stash in there is yours.
-- Squawking startles people mid-chase. Use it irresponsibly.
-- The groundskeeper rights knocked-over bins. Knock them over again.
+- **Humans never enter water.** The pond and the sea are your stash.
+- Dogs are faster than you and swim — but won't follow into the deep.
+- Bushes break line of sight. Stand still and you vanish.
+- The market magpie steals whatever you're carrying. It happens to everyone.
+- Humans reclaim stolen goods and put them back. Steal smarter.
+- Something dropped in a hurrying human's path is a banana peel by another name.
 
 ## Development
 
-Vanilla JS ES modules + canvas, procedurally drawn art, WebAudio-synthesised
-squawks. Pure game logic (collision math, NPC state machine, item rules,
-task progression) is DOM-free and unit tested:
+Phaser 3 + TypeScript + Vite. Every sprite is generated from TS SVG-builders
+and baked into a texture atlas; the world map is generated Tiled JSON; every
+sound is synthesised WebAudio — zero licensed assets.
 
 ```bash
-npm test             # node --test, 59 tests
+npm test         # vitest — pure logic: brains, tasks, items, save, layout
+npm run check    # tsc strict
+npm run bake     # tools/atlas + tools/map → public/assets
+npx tsx tools/atlas/sheet.ts ibis/ 3 /tmp/sheet.png   # art contact sheets
 ```
-
-Design doc: [docs/superpowers/specs/2026-06-12-bin-chicken-game-design.md](docs/superpowers/specs/2026-06-12-bin-chicken-game-design.md)
 
 ```
 src/
-├── main.js            bootstrap + game loop
-├── engine/            input, audio, camera, collision (pure), polyfills
-├── world/             level data (pure), ground/prop rendering
-├── entities/          ibis, npc runtime, npcBrain (pure), items (pure), sprites
-├── game/              state factory, tasks (pure)
-└── ui/                to-do notepad HUD, win screen
+├── scenes/        Boot → Preload → Title → World (+UIOverlay, Pause)
+├── actors/        player, humans, dogs, magpie, seagulls
+│   └── brain/     pure decision logic (unit tested)
+├── items/         pure item rules + Phaser item manager
+├── systems/       tasks, flags, mischief glue, save (versioned), settings,
+│                  input (kb+gamepad, remap), synthesised audio
+└── world/         layout data (pure), water rules, sprite metadata
+tools/             atlas baker, map generator, contact-sheet review tool
+test/              68 vitest tests
+docs/superpowers/  design specs and implementation plan
 ```
+
+Save data is versioned and sanitised on load; settings persist separately.
+A debug hook (`window.__game`, `window.__step`) drives headless E2E.
+
+The v1 vanilla-JS prototype lives at git tag `v1-vanilla`.
