@@ -8,6 +8,9 @@ import { Player } from '../actors/player';
 import { HumanNpc } from '../actors/humanRuntime';
 import { ItemManager, type BinState, type DragTarget } from '../items/itemManager';
 import { Mischief } from '../systems/mischief';
+import { SaveSystem, makeSave } from '../systems/save';
+import { SettingsSystem } from '../systems/settings';
+import { DISTRICT_ORDER, GATE_FOR_DISTRICT } from '../systems/tasks';
 
 export interface GateRuntime {
   id: string;
@@ -34,9 +37,18 @@ export class WorldScene extends Phaser.Scene {
   private currentDistrict: DistrictId = 'park';
   private squawkHeldFor = 0;
   private longHonkFired = false;
+  saves = new SaveSystem();
+  settings = new SettingsSystem();
+  private continueGame = false;
+  private playSeconds = 0;
+  private autosaveIn = 15;
 
   constructor() {
     super('World');
+  }
+
+  init(data: { continue?: boolean } = {}): void {
+    this.continueGame = data.continue === true;
   }
 
   create(): void {
@@ -79,8 +91,45 @@ export class WorldScene extends Phaser.Scene {
     cam.setBounds(0, 0, WORLD.w, WORLD.h);
     cam.startFollow(this.player.sprite, true, 0.12, 0.12);
 
+    this.input2.setBindings(this.settings.current.bindings);
+    if (this.continueGame) this.restoreSave();
+
     this.scene.launch('UIOverlay');
+    // UIOverlay subscribes a beat after launch; push initial state to it.
+    this.time.delayedCall(60, () => {
+      this.events.emit('tasks-changed', this.mischief.taskState);
+      this.events.emit('district-changed', this.districtAt(this.player.x, this.player.y));
+    });
     this.exposeDebugHook();
+  }
+
+  private restoreSave(): void {
+    const data = this.saves.load();
+    if (!data) return;
+    this.mischief.flags = data.flags;
+    this.mischief.taskState = this.saves.toTaskState(data);
+    this.playSeconds = data.playSeconds;
+    if (data.position) {
+      (this.player.sprite.body as Phaser.Physics.Arcade.Body).reset(data.position.x, data.position.y);
+    }
+    // Reopen gates for every district already unlocked.
+    for (let i = 0; i < DISTRICT_ORDER.length - 1; i++) {
+      const district = DISTRICT_ORDER[i]!;
+      const next = DISTRICT_ORDER[i + 1]!;
+      if (data.unlockedDistricts.includes(next)) {
+        const gateId = GATE_FOR_DISTRICT[district];
+        if (gateId) this.setGateOpen(gateId, true, true);
+      }
+    }
+  }
+
+  private persist(): void {
+    this.saves.save(makeSave(
+      this.mischief.taskState,
+      this.mischief.flags,
+      { x: this.player.x, y: this.player.y },
+      Math.round(this.playSeconds),
+    ));
   }
 
   // Which bins each tidy-minded npc is responsible for.
@@ -100,6 +149,19 @@ export class WorldScene extends Phaser.Scene {
   override update(time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 1 / 30);
     const p = this.player;
+    this.playSeconds += dt;
+
+    if (this.input2.justPressed('pause')) {
+      this.persist();
+      this.scene.pause();
+      this.scene.launch('Pause', { settings: this.settings });
+      return;
+    }
+    this.autosaveIn -= dt;
+    if (this.autosaveIn <= 0) {
+      this.autosaveIn = 15;
+      this.persist();
+    }
 
     // Bush overlap (positional — bushes have no physics body).
     p.inBush = this.bushZones.some(
@@ -282,7 +344,11 @@ export class WorldScene extends Phaser.Scene {
     const result = this.mischief.sync(p.x, p.y);
     for (const gate of result.gatesToOpen) this.setGateOpen(gate, true);
     for (const toast of result.toasts) this.events.emit('toast', toast);
-    if (result.won) this.events.emit('won');
+    if (result.toasts.length > 0) this.persist();
+    if (result.won) {
+      this.persist();
+      this.events.emit('won');
+    }
 
     const district = this.districtAt(p.x, p.y);
     if (district !== this.currentDistrict) {
@@ -300,7 +366,7 @@ export class WorldScene extends Phaser.Scene {
     return 'park';
   }
 
-  setGateOpen(id: string, open: boolean): void {
+  setGateOpen(id: string, open: boolean, instant = false): void {
     const gate = this.gates.get(id);
     if (!gate) return;
     gate.open = open;
@@ -313,10 +379,14 @@ export class WorldScene extends Phaser.Scene {
       const truck = this.propSprites.get('truck');
       const truckSolid = this.propSolids.get('truck');
       if (truck) {
-        this.tweens.add({
-          targets: truck, x: truck.x + 900, alpha: 0,
-          duration: 2500, ease: 'Sine.easeIn',
-        });
+        if (instant) {
+          truck.setVisible(false);
+        } else {
+          this.tweens.add({
+            targets: truck, x: truck.x + 900, alpha: 0,
+            duration: 2500, ease: 'Sine.easeIn',
+          });
+        }
       }
       if (truckSolid?.body) {
         (truckSolid.body as Phaser.Physics.Arcade.StaticBody).enable = false;

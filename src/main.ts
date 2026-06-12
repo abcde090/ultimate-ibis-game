@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/Boot';
 import { PreloadScene } from './scenes/Preload';
 import { WorldScene } from './scenes/World';
+import { TitleScene } from './scenes/Title';
+import { PauseScene } from './scenes/Pause';
 import { UIOverlayScene } from './scenes/UIOverlay';
 
 export const GAME_VERSION = '2.0.0-dev';
@@ -23,7 +25,7 @@ const game = new Phaser.Game({
     arcade: { debug: false },
   },
   input: { gamepad: true },
-  scene: [BootScene, PreloadScene, WorldScene, UIOverlayScene],
+  scene: [BootScene, PreloadScene, TitleScene, WorldScene, UIOverlayScene, PauseScene],
 });
 
 // Debug/E2E access (also used by the snapshot-based screenshot workflow).

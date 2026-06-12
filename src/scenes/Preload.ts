@@ -19,7 +19,7 @@ export class PreloadScene extends Phaser.Scene {
 
   create(): void {
     this.registerAnims();
-    this.scene.start('World');
+    this.scene.start('Title');
   }
 
   private registerAnims(): void {
