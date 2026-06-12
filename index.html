@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bin Chicken — An Ibis Mischief Game</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="960" height="600"></canvas>
+
+    <div id="hud">
+      <div id="todo" class="notepad">
+        <h2>To-Do List</h2>
+        <ul id="task-list"></ul>
+      </div>
+      <div id="hint">
+        <span><b>WASD/Arrows</b> waddle</span>
+        <span><b>Shift</b> sprint</span>
+        <span><b>Space</b> squawk</span>
+        <span><b>E</b> grab / drop / peck</span>
+      </div>
+    </div>
+
+    <div id="title-screen" class="overlay">
+      <div class="card">
+        <h1>BIN CHICKEN</h1>
+        <p class="subtitle">An Ibis Mischief Game</p>
+        <p>It is a lovely morning in the park,<br/>and you are a horrible ibis.</p>
+        <button id="start-btn">Begin the Mischief</button>
+      </div>
+    </div>
+
+    <div id="win-screen" class="overlay hidden">
+      <div class="card">
+        <h1>GLORIOUS.</h1>
+        <p>The Golden Chip rests in your nest.<br/>
+        The park will speak of this day in hushed tones.</p>
+        <p class="subtitle">You are a truly magnificent bin chicken.</p>
+        <button id="restart-btn">Cause More Mischief</button>
+      </div>
+    </div>
+
+    <div id="boot-error" class="overlay hidden">
+      <div class="card"><h1>Oh no</h1><p id="boot-error-msg"></p></div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

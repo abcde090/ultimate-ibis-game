@@ -1,0 +1,11 @@
+{
+  "name": "bin-chicken",
+  "version": "1.0.0",
+  "description": "An ibis mischief game in the spirit of Untitled Goose Game",
+  "type": "module",
+  "scripts": {
+    "test": "node --test 'test/*.test.js'",
+    "start": "npx -y serve -l 8123 ."
+  },
+  "license": "MIT"
+}
