@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/Boot';
+import { PreloadScene } from './scenes/Preload';
+import { WorldScene } from './scenes/World';
+import { UIOverlayScene } from './scenes/UIOverlay';
 
 export const GAME_VERSION = '2.0.0-dev';
 export const DESIGN_WIDTH = 1280;
 export const DESIGN_HEIGHT = 720;
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'app',
   width: DESIGN_WIDTH,
@@ -19,5 +22,20 @@ new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene],
+  input: { gamepad: true },
+  scene: [BootScene, PreloadScene, WorldScene, UIOverlayScene],
 });
+
+// Debug/E2E access (also used by the snapshot-based screenshot workflow).
+(window as unknown as { __phaserGame?: Phaser.Game }).__phaserGame = game;
+
+// Manually advance the game loop — lets E2E tooling run the game at full
+// speed even when the tab is hidden and rAF is throttled.
+let fakeClock = 0;
+(window as unknown as { __step?: (frames?: number) => void }).__step = (frames = 60) => {
+  if (fakeClock === 0) fakeClock = performance.now();
+  for (let i = 0; i < frames; i++) {
+    fakeClock += 1000 / 60;
+    game.loop.step(fakeClock);
+  }
+};

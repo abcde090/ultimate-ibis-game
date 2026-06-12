@@ -15,5 +15,6 @@ export class BootScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5);
+    this.scene.start('Preload');
   }
 }
