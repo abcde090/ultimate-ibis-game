@@ -13,6 +13,7 @@ import { ItemManager, type BinState, type DragTarget } from '../items/itemManage
 import { Mischief } from '../systems/mischief';
 import { SaveSystem, makeSave } from '../systems/save';
 import { SettingsSystem } from '../systems/settings';
+import { AudioSystem } from '../systems/audio';
 import { DISTRICT_ORDER, GATE_FOR_DISTRICT } from '../systems/tasks';
 
 export interface GateRuntime {
@@ -46,6 +47,7 @@ export class WorldScene extends Phaser.Scene {
   private magpieScaredThisFrame = false;
   saves = new SaveSystem();
   settings = new SettingsSystem();
+  audio = new AudioSystem(this.settings);
   private continueGame = false;
   private playSeconds = 0;
   private autosaveIn = 15;
@@ -184,6 +186,12 @@ export class WorldScene extends Phaser.Scene {
       (b) => Phaser.Math.Distance.Between(p.x, p.y, b.x, b.y) < b.r,
     );
 
+    // Browsers unlock audio on the first real gesture.
+    if (this.input2.isDown('up') || this.input2.isDown('down') || this.input2.isDown('left') ||
+        this.input2.isDown('right') || this.input2.isDown('squawk') || this.input2.isDown('grab')) {
+      this.audio.resume();
+    }
+
     if (this.input2.justPressed('flap')) {
       const hadItem = this.itemsMgr.heldBy('player');
       if (p.tryFlap() && hadItem) {
@@ -215,14 +223,17 @@ export class WorldScene extends Phaser.Scene {
     };
     for (const npc of this.npcs) {
       const events = npc.update({ ...ctxBase, fixableBinIds: this.fixableBinIds(npc.def.id) });
+      if (events.includes('slipped')) this.audio.slipWhistle();
       this.mischief.onNpcEvents(npc, events);
     }
 
     for (const dog of this.dogs) {
+      const wasChasing = dog.mind.state === 'chase';
       dog.update({
         playerX: p.x, playerY: p.y, playerHidden: p.hidden, dt,
         forceDropFromPlayer: (x, y) => this.forceDropFromPlayer(x, y),
       });
+      if (!wasChasing && dog.mind.state === 'chase') this.audio.bark();
       if (dog.escapedEvent) {
         dog.escapedEvent = false;
         this.mischief.flags.dogEscapedBySwimming = true;
@@ -239,6 +250,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.magpie.robbedEvent) {
       this.magpie.robbedEvent = false;
       this.mischief.flags.magpieRobbedYou = true;
+      this.audio.warble();
       p.squawk(); // outrage
       this.events.emit('toast', 'The magpie robbed you. The audacity.');
     }
@@ -260,6 +272,7 @@ export class WorldScene extends Phaser.Scene {
     const p = this.player;
     if (this.input2.justPressed('squawk')) {
       p.squawk();
+      this.audio.honk(false);
       this.squawkHeldFor = 0;
       this.longHonkFired = false;
       this.mischief.onHonk(p.x, p.y, false, this.npcs);
@@ -269,6 +282,7 @@ export class WorldScene extends Phaser.Scene {
       if (this.squawkHeldFor > 0.6 && !this.longHonkFired) {
         this.longHonkFired = true;
         p.squawk();
+        this.audio.honk(true);
         this.mischief.onHonk(p.x, p.y, true, this.npcs);
         if (this.seagulls.tryScatter(p.x, p.y)) {
           this.mischief.flags.seagullsScattered = true;
@@ -293,7 +307,10 @@ export class WorldScene extends Phaser.Scene {
     const held = this.itemsMgr.heldBy('player');
     if (held) {
       const result = this.itemsMgr.dropHeld('player', beak.x, beak.y);
-      if (result) this.mischief.onDropped(result.item, beak.x, beak.y);
+      if (result) {
+        this.mischief.onDropped(result.item, beak.x, beak.y);
+        if (result.splashed) this.audio.splash();
+      }
       p.carriedId = null;
       return;
     }
@@ -311,6 +328,7 @@ export class WorldScene extends Phaser.Scene {
       bin.sprite.setFrame('prop/bin-knocked');
       if (bin.solid?.body) (bin.solid.body as Phaser.Physics.Arcade.StaticBody).enable = false;
       this.itemsMgr.spawnTrash(bin.x, bin.y);
+      this.audio.clang();
       this.mischief.onBinKnocked();
       this.cameras.main.shake(80, 0.004);
       return;
@@ -342,6 +360,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private popBalloon(stand: Phaser.GameObjects.Sprite): void {
+    this.audio.pop();
     this.mischief.flags.balloonPopped = true;
     if (!this.settings.current.reducedMotion) this.cameras.main.shake(70, 0.004);
     // One balloon makes a break for it.
@@ -441,16 +460,22 @@ export class WorldScene extends Phaser.Scene {
     const p = this.player;
     const result = this.mischief.sync(p.x, p.y);
     for (const gate of result.gatesToOpen) this.setGateOpen(gate, true);
-    for (const toast of result.toasts) this.events.emit('toast', toast);
+    for (const toast of result.toasts) {
+      this.events.emit('toast', toast);
+      if (toast.startsWith('\u2713')) this.audio.ding();
+      else this.audio.unlock();
+    }
     if (result.toasts.length > 0) this.persist();
     if (result.won) {
       this.persist();
+      this.audio.fanfare();
       this.events.emit('won');
     }
 
     const district = this.districtAt(p.x, p.y);
     if (district !== this.currentDistrict) {
       this.currentDistrict = district;
+      this.audio.setDistrict(district);
       this.events.emit('district-changed', district);
     }
   }
