@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
 import {
-  WORLD, TILE_PX, BARRIERS, GATES, PROPS, PLAYER_START, DISTRICTS,
+  WORLD, TILE_PX, BARRIERS, GATES, PROPS, NPCS, PLAYER_START, DISTRICTS,
 } from '../world/layoutData';
 import type { DistrictId } from '../world/layoutData';
 import { InputSystem } from '../systems/input';
 import { Player } from '../actors/player';
+import { HumanNpc } from '../actors/humanRuntime';
+import { ItemManager, type BinState, type DragTarget } from '../items/itemManager';
+import { Mischief } from '../systems/mischief';
 
 export interface GateRuntime {
   id: string;
@@ -23,6 +26,14 @@ export class WorldScene extends Phaser.Scene {
   propSprites = new Map<string, Phaser.GameObjects.Sprite>();
   propSolids = new Map<string, Phaser.GameObjects.Rectangle>();
   bushZones: Array<{ x: number; y: number; r: number; sprite: Phaser.GameObjects.Sprite }> = [];
+  itemsMgr!: ItemManager;
+  mischief!: Mischief;
+  npcs: HumanNpc[] = [];
+  bins = new Map<string, BinState>();
+  dragTargets: DragTarget[] = [];
+  private currentDistrict: DistrictId = 'park';
+  private squawkHeldFor = 0;
+  private longHonkFired = false;
 
   constructor() {
     super('World');
@@ -53,6 +64,17 @@ export class WorldScene extends Phaser.Scene {
       undefined, () => !this.player.airborne,
     );
 
+    this.itemsMgr = new ItemManager(this);
+    this.mischief = new Mischief(this, this.itemsMgr);
+
+    for (const def of NPCS) {
+      const npc = new HumanNpc(this, def);
+      this.npcs.push(npc);
+      this.physics.add.collider(npc.sprite, this.solids);
+      this.physics.add.collider(npc.sprite, this.fenceSolids);
+      this.physics.add.collider(npc.sprite, this.gateSolids);
+    }
+
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD.w, WORLD.h);
     cam.startFollow(this.player.sprite, true, 0.12, 0.12);
@@ -61,20 +83,212 @@ export class WorldScene extends Phaser.Scene {
     this.exposeDebugHook();
   }
 
-  override update(_time: number, deltaMs: number): void {
+  // Which bins each tidy-minded npc is responsible for.
+  private fixableBinIds(npcId: string): string[] {
+    const map: Record<string, string> = {
+      groundskeeper: 'bin-park',
+      waiter: 'bin-cafe',
+      fruitvendor: 'bin-market',
+      lifeguard: 'bin-beach',
+      clubpresident: 'bin-oval',
+    };
+    const prefix = map[npcId];
+    if (!prefix) return [];
+    return [...this.bins.keys()].filter((id) => id.startsWith(prefix));
+  }
+
+  override update(time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 1 / 30);
+    const p = this.player;
 
     // Bush overlap (positional — bushes have no physics body).
-    const p = this.player;
     p.inBush = this.bushZones.some(
       (b) => Phaser.Math.Distance.Between(p.x, p.y, b.x, b.y) < b.r,
     );
 
-    if (this.input2.justPressed('flap')) p.tryFlap();
-    if (this.input2.justPressed('squawk')) p.squawk();
+    if (this.input2.justPressed('flap')) {
+      const hadItem = this.itemsMgr.heldBy('player');
+      if (p.tryFlap() && hadItem) {
+        // Flapping needs both wings: the cargo gets jettisoned.
+        const beak = p.beakTip();
+        const result = this.itemsMgr.dropHeld('player', beak.x, beak.y);
+        if (result) this.mischief.onDropped(result.item, beak.x, beak.y);
+        p.carriedId = null;
+      }
+    }
+    this.handleSquawk(dt);
+    if (this.input2.justPressed('grab')) this.handleGrabKey();
 
     p.update(this.input2, dt);
+    this.updateDrag();
+
+    const ctxBase = {
+      playerX: p.x,
+      playerY: p.y,
+      playerHidden: p.hidden,
+      playerInWater: p.swimming,
+      playerHoldsAnything: this.itemsMgr.heldBy('player') !== null,
+      playerHeldItemOwner: (this.itemsMgr.heldBy('player')?.owner ?? 'none') as string | 'none',
+      items: this.itemsMgr,
+      bins: this.bins,
+      time: time / 1000,
+      dt,
+      forceDropFromPlayer: (npcX: number, npcY: number) => this.forceDropFromPlayer(npcX, npcY),
+    };
+    for (const npc of this.npcs) {
+      const events = npc.update({ ...ctxBase, fixableBinIds: this.fixableBinIds(npc.def.id) });
+      this.mischief.onNpcEvents(npc, events);
+    }
+
+    this.itemsMgr.update(p.x, p.y, p.facing, p.y, (id) => {
+      const npc = this.npcs.find((n) => n.def.id === id);
+      return npc ? { x: npc.x, y: npc.y, facing: npc.facing } : null;
+    });
+
+    this.checkZones();
+    this.progress();
     this.input2.endFrame();
+  }
+
+  private handleSquawk(dt: number): void {
+    const p = this.player;
+    if (this.input2.justPressed('squawk')) {
+      p.squawk();
+      this.squawkHeldFor = 0;
+      this.longHonkFired = false;
+      this.mischief.onHonk(p.x, p.y, false, this.npcs);
+      this.events.emit('squawk', false);
+    } else if (this.input2.isDown('squawk')) {
+      this.squawkHeldFor += dt;
+      if (this.squawkHeldFor > 0.6 && !this.longHonkFired) {
+        this.longHonkFired = true;
+        p.squawk();
+        this.mischief.onHonk(p.x, p.y, true, this.npcs);
+        this.events.emit('squawk', true);
+      }
+    }
+  }
+
+  private handleGrabKey(): void {
+    const p = this.player;
+    const beak = p.beakTip();
+
+    if (p.draggingId) {
+      this.stopDrag();
+      return;
+    }
+
+    const held = this.itemsMgr.heldBy('player');
+    if (held) {
+      const result = this.itemsMgr.dropHeld('player', beak.x, beak.y);
+      if (result) this.mischief.onDropped(result.item, beak.x, beak.y);
+      p.carriedId = null;
+      return;
+    }
+
+    const grabbed = this.itemsMgr.tryGrab(beak.x, beak.y, this.mischief.flags);
+    if (grabbed) {
+      p.carriedId = grabbed.id;
+      this.mischief.onGrabbed(grabbed);
+      return;
+    }
+
+    const bin = this.itemsMgr.peckableBin(beak.x, beak.y, this.bins.values());
+    if (bin) {
+      bin.upright = false;
+      bin.sprite.setFrame('prop/bin-knocked');
+      if (bin.solid?.body) (bin.solid.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+      this.itemsMgr.spawnTrash(bin.x, bin.y);
+      this.mischief.onBinKnocked();
+      this.cameras.main.shake(80, 0.004);
+      return;
+    }
+
+    const drag = this.itemsMgr.draggableNear(p.x, p.y, this.dragTargets);
+    if (drag) {
+      p.draggingId = drag.id;
+      const solid = this.propSolids.get(drag.id);
+      if (solid?.body) (solid.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    }
+  }
+
+  private updateDrag(): void {
+    const p = this.player;
+    if (!p.draggingId) return;
+    const target = this.dragTargets.find((t) => t.id === p.draggingId);
+    if (!target) {
+      p.draggingId = null;
+      return;
+    }
+    target.sprite.setPosition(p.x - p.facing * 30, p.y + 4).setDepth(p.y - 1);
+
+    if (p.draggingId === 'sign-open' &&
+        Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, target.homeX, target.homeY) > 180) {
+      this.mischief.flags.signDragged = true;
+    }
+    if (p.draggingId.startsWith('towel') && p.swimming) {
+      this.mischief.flags.towelDragged = true;
+    }
+  }
+
+  private stopDrag(): void {
+    const p = this.player;
+    if (!p.draggingId) return;
+    const solid = this.propSolids.get(p.draggingId);
+    const target = this.dragTargets.find((t) => t.id === p.draggingId);
+    if (solid?.body && target) {
+      const body = solid.body as Phaser.Physics.Arcade.StaticBody;
+      body.enable = true;
+      // Move the static body to where the prop now rests.
+      body.position.set(target.sprite.x - body.halfWidth, target.sprite.y - body.height);
+      body.updateFromGameObject();
+    }
+    p.draggingId = null;
+  }
+
+  private forceDropFromPlayer(npcX: number, npcY: number): string | null {
+    const held = this.itemsMgr.heldBy('player');
+    if (!held) return null;
+    this.itemsMgr.forcedDrop(held, npcX, npcY, this.player.x, this.player.y);
+    this.player.carriedId = null;
+    this.player.squawk(); // indignant protest
+    this.events.emit('squawk', false);
+    return held.id;
+  }
+
+  private checkZones(): void {
+    const p = this.player;
+    const flags = this.mischief.flags;
+
+    // Shed sneak: stand at the shed door.
+    const shed = PROPS.find((d) => d.sprite === 'prop/shed');
+    if (shed && Phaser.Math.Distance.Between(p.x, p.y, shed.x, shed.y + 14) < 44) {
+      flags.shedSneaked = true;
+    }
+
+    // Sandcastle trampling.
+    for (const [id, sprite] of this.propSprites) {
+      if (!id.startsWith('sandcastle') || sprite.frame.name === 'prop/sandcastle-flat') continue;
+      if (Phaser.Math.Distance.Between(p.x, p.y, sprite.x, sprite.y) < 30) {
+        sprite.setFrame('prop/sandcastle-flat');
+        flags.sandcastleTrampled = true;
+        this.cameras.main.shake(60, 0.003);
+      }
+    }
+  }
+
+  private progress(): void {
+    const p = this.player;
+    const result = this.mischief.sync(p.x, p.y);
+    for (const gate of result.gatesToOpen) this.setGateOpen(gate, true);
+    for (const toast of result.toasts) this.events.emit('toast', toast);
+    if (result.won) this.events.emit('won');
+
+    const district = this.districtAt(p.x, p.y);
+    if (district !== this.currentDistrict) {
+      this.currentDistrict = district;
+      this.events.emit('district-changed', district);
+    }
   }
 
   districtAt(x: number, y: number): DistrictId {
@@ -166,17 +380,27 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private buildProps(): void {
+    const DRAGGABLE = /^(towel-|sign-open$|esky-)/;
     for (const def of PROPS) {
       const sprite = this.add.sprite(def.x, def.y, 'atlas', def.sprite).setOrigin(0.5, 1).setDepth(def.y);
       if (def.id) this.propSprites.set(def.id, sprite);
       if (def.sprite === 'prop/bush' && def.id) {
         this.bushZones.push({ x: def.x, y: def.y - 14, r: 46, sprite });
       }
+      let solidRect: Phaser.GameObjects.Rectangle | null = null;
       if (def.solid) {
-        const rect = this.add.rectangle(def.x, def.y - def.solid.h / 2, def.solid.w, def.solid.h);
-        this.solids.add(rect);
-        rect.setVisible(false);
-        if (def.id) this.propSolids.set(def.id, rect);
+        solidRect = this.add.rectangle(def.x, def.y - def.solid.h / 2, def.solid.w, def.solid.h);
+        this.solids.add(solidRect);
+        solidRect.setVisible(false);
+        if (def.id) this.propSolids.set(def.id, solidRect);
+      }
+      if (def.id && def.sprite === 'prop/bin-upright') {
+        this.bins.set(def.id, {
+          id: def.id, x: def.x, y: def.y, upright: true, sprite, solid: solidRect,
+        });
+      }
+      if (def.id && DRAGGABLE.test(def.id)) {
+        this.dragTargets.push({ id: def.id, sprite, homeX: def.x, homeY: def.y });
       }
     }
   }
@@ -189,8 +413,17 @@ export class WorldScene extends Phaser.Scene {
         const p = scene.player;
         return {
           x: p.x, y: p.y, hidden: p.hidden, swimming: p.swimming,
-          airborne: p.airborne, carriedId: p.carriedId,
+          airborne: p.airborne, carriedId: scene.itemsMgr.heldBy('player')?.id ?? null,
+          draggingId: p.draggingId,
         };
+      },
+      get flags() { return scene.mischief.flags; },
+      get tasks() { return scene.mischief.taskState; },
+      get npcs() {
+        return scene.npcs.map((n) => ({
+          id: n.def.id, x: Math.round(n.x), y: Math.round(n.y),
+          state: n.mind.state, held: n.heldItemId,
+        }));
       },
       openGate: (id: string) => scene.setGateOpen(id, true),
       fps: () => scene.game.loop.actualFps,
