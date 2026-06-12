@@ -1,11 +1,29 @@
 {
   "name": "bin-chicken",
-  "version": "1.0.0",
-  "description": "An ibis mischief game in the spirit of Untitled Goose Game",
+  "version": "2.0.0-dev",
+  "description": "Bin Chicken — a commercial ibis mischief game (Untitled Goose Game-inspired)",
+  "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test 'test/*.test.js'",
-    "start": "npx -y serve -l 8123 ."
+    "dev": "vite",
+    "build": "npm run check && vite build",
+    "preview": "vite preview --port 8123",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc --noEmit",
+    "bake": "tsx tools/atlas/bake.ts && tsx tools/map/generate.ts",
+    "format": "prettier --write 'src/**/*.ts' 'tools/**/*.ts' 'test/**/*.ts'"
   },
-  "license": "MIT"
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.0",
+    "sharp": "^0.34.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0",
+    "vitest": "^3.1.0"
+  },
+  "license": "UNLICENSED"
 }

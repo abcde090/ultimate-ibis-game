@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "bin-chicken",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["-y", "serve", "-l", "8123", "."],
-      "port": 8123
+      "name": "bin-chicken-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 8124
     }
   ]
 }
