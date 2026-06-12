@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import {
-  WORLD, TILE_PX, BARRIERS, GATES, PROPS, NPCS, PLAYER_START, DISTRICTS,
+  WORLD, TILE_PX, BARRIERS, GATES, PROPS, NPCS, DOGS, PLAYER_START, DISTRICTS,
 } from '../world/layoutData';
 import type { DistrictId } from '../world/layoutData';
 import { InputSystem } from '../systems/input';
 import { Player } from '../actors/player';
 import { HumanNpc } from '../actors/humanRuntime';
+import { Dog } from '../actors/dog';
+import { Magpie } from '../actors/magpie';
+import { SeagullFlock } from '../actors/seagull';
 import { ItemManager, type BinState, type DragTarget } from '../items/itemManager';
 import { Mischief } from '../systems/mischief';
 import { SaveSystem, makeSave } from '../systems/save';
@@ -32,11 +35,15 @@ export class WorldScene extends Phaser.Scene {
   itemsMgr!: ItemManager;
   mischief!: Mischief;
   npcs: HumanNpc[] = [];
+  dogs: Dog[] = [];
+  magpie!: Magpie;
+  seagulls!: SeagullFlock;
   bins = new Map<string, BinState>();
   dragTargets: DragTarget[] = [];
   private currentDistrict: DistrictId = 'park';
   private squawkHeldFor = 0;
   private longHonkFired = false;
+  private magpieScaredThisFrame = false;
   saves = new SaveSystem();
   settings = new SettingsSystem();
   private continueGame = false;
@@ -86,6 +93,15 @@ export class WorldScene extends Phaser.Scene {
       this.physics.add.collider(npc.sprite, this.fenceSolids);
       this.physics.add.collider(npc.sprite, this.gateSolids);
     }
+    for (const def of DOGS) {
+      const dog = new Dog(this, def);
+      this.dogs.push(dog);
+      this.physics.add.collider(dog.sprite, this.solids);
+      this.physics.add.collider(dog.sprite, this.fenceSolids);
+      this.physics.add.collider(dog.sprite, this.gateSolids);
+    }
+    this.magpie = new Magpie(this);
+    this.seagulls = new SeagullFlock(this);
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD.w, WORLD.h);
@@ -202,6 +218,34 @@ export class WorldScene extends Phaser.Scene {
       this.mischief.onNpcEvents(npc, events);
     }
 
+    for (const dog of this.dogs) {
+      dog.update({
+        playerX: p.x, playerY: p.y, playerHidden: p.hidden, dt,
+        forceDropFromPlayer: (x, y) => this.forceDropFromPlayer(x, y),
+      });
+      if (dog.escapedEvent) {
+        dog.escapedEvent = false;
+        this.mischief.flags.dogEscapedBySwimming = true;
+      }
+    }
+
+    this.magpie.update({
+      playerX: p.x, playerY: p.y,
+      playerCarriedId: this.itemsMgr.heldBy('player')?.id ?? null,
+      items: this.itemsMgr, dt,
+      scaredOff: this.magpieScaredThisFrame,
+    });
+    this.magpieScaredThisFrame = false;
+    if (this.magpie.robbedEvent) {
+      this.magpie.robbedEvent = false;
+      this.mischief.flags.magpieRobbedYou = true;
+      p.squawk(); // outrage
+      this.events.emit('toast', 'The magpie robbed you. The audacity.');
+    }
+    p.carriedId = this.itemsMgr.heldBy('player')?.id ?? null;
+
+    this.seagulls.update(dt);
+
     this.itemsMgr.update(p.x, p.y, p.facing, p.y, (id) => {
       const npc = this.npcs.find((n) => n.def.id === id);
       return npc ? { x: npc.x, y: npc.y, facing: npc.facing } : null;
@@ -226,6 +270,12 @@ export class WorldScene extends Phaser.Scene {
         this.longHonkFired = true;
         p.squawk();
         this.mischief.onHonk(p.x, p.y, true, this.npcs);
+        if (this.seagulls.tryScatter(p.x, p.y)) {
+          this.mischief.flags.seagullsScattered = true;
+        }
+        if (Phaser.Math.Distance.Between(p.x, p.y, this.magpie.x, this.magpie.y) < 320) {
+          this.magpieScaredThisFrame = true;
+        }
         this.events.emit('squawk', true);
       }
     }
@@ -266,12 +316,47 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    // Unleash a nearby tied-up dog.
+    const leashed = this.dogs.find(
+      (d) => d.leashed && Phaser.Math.Distance.Between(p.x, p.y, d.x, d.y) < 64,
+    );
+    if (leashed) {
+      leashed.unleash();
+      this.mischief.flags.dogUnleashed = true;
+      return;
+    }
+
+    // Pop a balloon off the stand.
+    const stand = this.propSprites.get('balloon-stand');
+    if (stand && Phaser.Math.Distance.Between(beak.x, beak.y, stand.x, stand.y - 90) < 80) {
+      this.popBalloon(stand);
+      return;
+    }
+
     const drag = this.itemsMgr.draggableNear(p.x, p.y, this.dragTargets);
     if (drag) {
       p.draggingId = drag.id;
       const solid = this.propSolids.get(drag.id);
       if (solid?.body) (solid.body as Phaser.Physics.Arcade.StaticBody).enable = false;
     }
+  }
+
+  private popBalloon(stand: Phaser.GameObjects.Sprite): void {
+    this.mischief.flags.balloonPopped = true;
+    if (!this.settings.current.reducedMotion) this.cameras.main.shake(70, 0.004);
+    // One balloon makes a break for it.
+    const balloon = this.add
+      .sprite(stand.x + 10, stand.y - 100, 'atlas', 'item/balloon-loose')
+      .setDepth(stand.y + 300);
+    this.tweens.add({
+      targets: balloon,
+      y: balloon.y - 320,
+      x: balloon.x + 60,
+      alpha: 0,
+      duration: 1800,
+      ease: 'Sine.easeOut',
+      onComplete: () => balloon.destroy(),
+    });
   }
 
   private updateDrag(): void {
@@ -287,6 +372,10 @@ export class WorldScene extends Phaser.Scene {
     if (p.draggingId === 'sign-open' &&
         Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, target.homeX, target.homeY) > 180) {
       this.mischief.flags.signDragged = true;
+    }
+    if (p.draggingId.startsWith('price-sign') &&
+        Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, target.homeX, target.homeY) > 130) {
+      this.mischief.flags.signsSwapped = true;
     }
     if (p.draggingId.startsWith('towel') && p.swimming) {
       this.mischief.flags.towelDragged = true;
@@ -334,7 +423,16 @@ export class WorldScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(p.x, p.y, sprite.x, sprite.y) < 30) {
         sprite.setFrame('prop/sandcastle-flat');
         flags.sandcastleTrampled = true;
-        this.cameras.main.shake(60, 0.003);
+        if (!this.settings.current.reducedMotion) this.cameras.main.shake(60, 0.003);
+      }
+    }
+
+    // The trophy case unlocks when the key is brought to it.
+    if (!flags.trophyCaseOpen && this.itemsMgr.heldBy('player')?.kind === 'key') {
+      const trophyCase = this.propSprites.get('trophy-case');
+      if (trophyCase && Phaser.Math.Distance.Between(p.x, p.y, trophyCase.x, trophyCase.y) < 80) {
+        flags.trophyCaseOpen = true;
+        this.events.emit('toast', 'The trophy case clicks open…');
       }
     }
   }
@@ -450,7 +548,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private buildProps(): void {
-    const DRAGGABLE = /^(towel-|sign-open$|esky-)/;
+    const DRAGGABLE = /^(towel-|sign-open$|esky-|price-sign)/;
     for (const def of PROPS) {
       const sprite = this.add.sprite(def.x, def.y, 'atlas', def.sprite).setOrigin(0.5, 1).setDepth(def.y);
       if (def.id) this.propSprites.set(def.id, sprite);
