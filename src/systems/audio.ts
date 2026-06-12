@@ -23,9 +23,15 @@ export class AudioSystem {
   }
 
   resume(): void {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      void this.ctx.resume().catch(() => undefined);
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') {
+      void this.ctx.resume().then(() => this.maybeStartAmbience()).catch(() => undefined);
+    } else {
+      this.maybeStartAmbience();
     }
+  }
+
+  private maybeStartAmbience(): void {
     if (!this.ambienceStarted && this.ctx && this.ctx.state === 'running') {
       this.ambienceStarted = true;
       this.startAmbience();

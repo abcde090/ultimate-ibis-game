@@ -83,11 +83,23 @@ export class HumanNpc {
     this.bubbleTimer = seconds;
   }
 
-  // The pratfall: interrupts everything, drops whatever they carry.
+  // The pratfall: interrupts everything. Callers with world access must
+  // also release any carried item via dropHeldItem().
   triggerSlip(): void {
     this.mind = { ...this.mind, state: 'slip', timer: SLIP_SECONDS };
-    if (this.heldItemId) this.heldItemId = null; // item keeps lying where it is
     this.say('WAH!', '#e0533d');
+  }
+
+  // Release a carried item where the npc stands, keeping holder in sync.
+  dropHeldItem(ctx: HumanContext): void {
+    if (!this.heldItemId) return;
+    const item = ctx.items.byId(this.heldItemId);
+    if (item && item.holder === this.def.id) {
+      item.holder = null;
+      item.x = this.x;
+      item.y = this.y + 4;
+    }
+    this.heldItemId = null;
   }
 
   update(ctx: HumanContext): string[] {
@@ -266,6 +278,7 @@ export class HumanNpc {
         if (item.holder !== null || item.inWater || !SLIPPERY_KINDS.has(item.kind)) continue;
         if (Phaser.Math.Distance.Between(this.x, this.y, item.x, item.y) < 16) {
           this.triggerSlip();
+          this.dropHeldItem(ctx);
           events.push('slipped');
           break;
         }

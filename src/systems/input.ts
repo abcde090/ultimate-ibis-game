@@ -53,7 +53,13 @@ export class InputSystem {
       });
       kb.on('keyup', (e: KeyboardEvent) => this.down.delete(e.code));
     }
-    scene.game.events.on(Phaser.Core.Events.BLUR, () => this.reset());
+    const onBlur = (): void => this.reset();
+    scene.game.events.on(Phaser.Core.Events.BLUR, onBlur);
+    // Scene restarts build a fresh InputSystem; detach from the global
+    // emitter so handlers don't accumulate across playthroughs.
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.game.events.off(Phaser.Core.Events.BLUR, onBlur);
+    });
   }
 
   setBindings(bindings: KeyBindings): void {

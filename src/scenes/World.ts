@@ -61,6 +61,24 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser reuses the scene instance on restart: class fields initialise
+    // once, so every per-run collection must be reset here or stale actors
+    // with destroyed sprites survive into the next playthrough.
+    this.npcs = [];
+    this.dogs = [];
+    this.bins = new Map();
+    this.dragTargets = [];
+    this.bushZones = [];
+    this.gates = new Map();
+    this.propSprites = new Map();
+    this.propSolids = new Map();
+    this.currentDistrict = 'park';
+    this.playSeconds = 0;
+    this.autosaveIn = 15;
+    this.squawkHeldFor = 0;
+    this.longHonkFired = false;
+    this.magpieScaredThisFrame = false;
+
     this.physics.world.setBounds(0, 0, WORLD.w, WORLD.h);
 
     const map = this.make.tilemap({ key: 'map' });
@@ -118,7 +136,7 @@ export class WorldScene extends Phaser.Scene {
       this.events.emit('tasks-changed', this.mischief.taskState);
       this.events.emit('district-changed', this.districtAt(this.player.x, this.player.y));
     });
-    this.exposeDebugHook();
+    if (import.meta.env.DEV) this.exposeDebugHook();
   }
 
   private restoreSave(): void {
@@ -367,15 +385,19 @@ export class WorldScene extends Phaser.Scene {
     const balloon = this.add
       .sprite(stand.x + 10, stand.y - 100, 'atlas', 'item/balloon-loose')
       .setDepth(stand.y + 300);
-    this.tweens.add({
-      targets: balloon,
-      y: balloon.y - 320,
-      x: balloon.x + 60,
-      alpha: 0,
-      duration: 1800,
-      ease: 'Sine.easeOut',
-      onComplete: () => balloon.destroy(),
-    });
+    if (this.settings.current.reducedMotion) {
+      this.time.delayedCall(400, () => balloon.destroy());
+    } else {
+      this.tweens.add({
+        targets: balloon,
+        y: balloon.y - 320,
+        x: balloon.x + 60,
+        alpha: 0,
+        duration: 1800,
+        ease: 'Sine.easeOut',
+        onComplete: () => balloon.destroy(),
+      });
+    }
   }
 
   private updateDrag(): void {
@@ -502,7 +524,7 @@ export class WorldScene extends Phaser.Scene {
       const truck = this.propSprites.get('truck');
       const truckSolid = this.propSolids.get('truck');
       if (truck) {
-        if (instant) {
+        if (instant || this.settings.current.reducedMotion) {
           truck.setVisible(false);
         } else {
           this.tweens.add({

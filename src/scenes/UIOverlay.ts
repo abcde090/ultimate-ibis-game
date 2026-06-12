@@ -29,6 +29,13 @@ export class UIOverlayScene extends Phaser.Scene {
     this.buildHint();
 
     const world = this.scene.get('World');
+    // This scene can be re-created (replay, quit-to-title); drop any listeners
+    // a previous incarnation left on the World's emitter or they pile up and
+    // fire into destroyed text objects.
+    world.events.off('tasks-changed');
+    world.events.off('district-changed');
+    world.events.off('toast');
+    world.events.off('won');
     world.events.on('tasks-changed', (ts: TaskState) => {
       this.taskState = ts;
       this.refreshNotepad();
@@ -161,10 +168,14 @@ export class UIOverlayScene extends Phaser.Scene {
     void veil; void title; void sub;
 
     this.input.keyboard?.once('keydown-R', () => {
-      this.scene.get('World').scene.restart();
-      this.scene.restart();
+      this.scene.stop('World');
+      this.scene.stop();
+      this.scene.start('World', { continue: false });
     });
-    this.tweens.add({ targets: hint, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
+    const reduced = (this.scene.get('World') as { settings?: { current: { reducedMotion: boolean } } })
+      .settings?.current.reducedMotion;
+    if (reduced) hint.setAlpha(0.7);
+    else this.tweens.add({ targets: hint, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
   }
 
   override update(): void {
