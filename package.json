@@ -1,7 +1,7 @@
 {
   "name": "bin-chicken",
   "version": "2.0.0",
-  "description": "Bin Chicken — a commercial ibis mischief game (Untitled Goose Game-inspired)",
+  "description": "Bin Chicken \u2014 a commercial ibis mischief game (Untitled Goose Game-inspired)",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "check": "tsc --noEmit",
     "bake": "tsx tools/atlas/bake.ts && tsx tools/map/generate.ts",
-    "format": "prettier --write 'src/**/*.ts' 'tools/**/*.ts' 'test/**/*.ts'"
+    "format": "prettier --write 'src/**/*.ts' 'tools/**/*.ts' 'test/**/*.ts'",
+    "build:artifact": "vite build --config vite.artifact.config.ts && tsx tools/artifact/assemble.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"

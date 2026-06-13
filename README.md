@@ -23,6 +23,24 @@ Production build (itch.io-ready zip):
 npm run build    # → dist/ (relative paths, drop onto any static host)
 ```
 
+### Single-file build (share / review / Claude artifact)
+
+```bash
+npm run build:artifact   # → bin-chicken.html  (~660 KB, one file)
+```
+
+`bin-chicken.html` is fully self-contained: every sprite and the whole map are
+base64-inlined, the game is bundled inline, and Phaser loads from cdnjs (pinned
+with an SRI integrity hash). It needs **no server and no install** — double-click
+to open (needs internet for the Phaser CDN), email it, host it anywhere, or paste
+it into a Claude HTML artifact for others to play and review.
+
+Notes for reviewers:
+- **Desktop + keyboard.** Click the game once to give it focus, then use the
+  controls below. There are no touch controls, so phones can't play it.
+- Saves use `localStorage`; in sandboxes that block storage the game still runs,
+  it just won't show **Continue** or persist progress.
+
 ### Controls (remappable in-game)
 
 | Input | Action |
