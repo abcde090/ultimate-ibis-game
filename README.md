@@ -9,7 +9,23 @@ Strip, the Market Stalls, the Foreshore, and the Cricket Oval — each with a
 to-do list of mischief. Finish a district's list and the next gate opens.
 Finish them all and one prize remains: **the Golden Chip**.
 
-## Play
+## Play online (GitHub Pages)
+
+This is a pure front-end game, so GitHub Pages hosts it for free. A workflow at
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) builds the site and
+publishes it on every push to `main`.
+
+One-time setup after pushing the repo to GitHub:
+
+1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Push to `main` (or run the workflow from the Actions tab).
+3. The game goes live at `https://<user>.github.io/<repo>/`.
+
+The published build bundles Phaser, so the hosted game has no external
+dependencies. (The standalone [bin-chicken.html](bin-chicken.html) is also
+committed and works on its own — it loads Phaser from a CDN.)
+
+## Play locally
 
 ```bash
 npm install
