@@ -1,6 +1,6 @@
 {
   "name": "bin-chicken",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Bin Chicken \u2014 a commercial ibis mischief game (Untitled Goose Game-inspired)",
   "private": true,
   "type": "module",
