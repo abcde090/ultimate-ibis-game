@@ -188,6 +188,11 @@ export class WorldScene extends Phaser.Scene {
     this.playSeconds += dt;
 
     if (this.input2.justPressed('pause')) {
+      // Consume the press now: this early return skips the endFrame() at the
+      // bottom, and World.update won't run again until we resume — so without
+      // this the buffered 'pause' press would survive the pause and instantly
+      // re-pause the game on resume (you could never get back in).
+      this.input2.endFrame();
       this.persist();
       this.scene.pause();
       this.scene.launch('Pause', { settings: this.settings });
