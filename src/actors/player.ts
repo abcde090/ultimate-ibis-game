@@ -62,6 +62,11 @@ export class Player {
     this.swimming = !this.airborne && inWater(this.x, this.y);
 
     const axis = input.axis();
+    // On touch, the joystick is analog: how far it's pushed sets the speed.
+    // Keyboard/gamepad stay digital (null throttle → walk / Shift-sprint).
+    const analogThrottle = input.touch.active
+      ? Math.min(1, Math.hypot(axis.x, axis.y))
+      : null;
     const body = this.body();
     const next = stepMovement(
       { vx: body.velocity.x, vy: body.velocity.y, facing: this.facing },
@@ -69,6 +74,7 @@ export class Player {
         axisX: axis.x,
         axisY: axis.y,
         sprint: input.isDown('sprint'),
+        analogThrottle,
         swimming: this.swimming,
         dragging: this.draggingId !== null,
         airborne: this.airborne,
@@ -101,7 +107,7 @@ export class Player {
     const body = this.body();
     const speed = Math.hypot(body.velocity.x, body.velocity.y);
     if (speed < 40) {
-      body.setVelocity(this.facing * maxSpeed({ sprint: false, swimming: false, dragging: false, airborne: true }) * 0.7, body.velocity.y);
+      body.setVelocity(this.facing * maxSpeed({ sprint: false, analogThrottle: null, swimming: false, dragging: false, airborne: true }) * 0.7, body.velocity.y);
     }
     this.hopTween?.stop();
     this.hopTween = this.sprite.scene.tweens.addCounter({

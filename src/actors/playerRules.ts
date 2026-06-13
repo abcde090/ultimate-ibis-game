@@ -3,6 +3,7 @@
 export const PLAYER = {
   walkSpeed: 200,
   sprintSpeed: 330,
+  touchMinSpeed: 130,  // gentlest joystick push (analog floor)
   swimFactor: 0.55,
   dragFactor: 0.4,
   accel: 1800,
@@ -24,14 +25,26 @@ export interface MoveContext {
   axisX: number;       // -1..1
   axisY: number;
   sprint: boolean;
+  // Analog throttle 0..1 from a touch joystick — when set, speed ramps with
+  // how far the stick is pushed (touchMinSpeed..sprintSpeed). null for
+  // keyboard/gamepad, which stay digital (walk, or sprint while held).
+  analogThrottle: number | null;
   swimming: boolean;
   dragging: boolean;
   airborne: boolean;
   dt: number;
 }
 
-export function maxSpeed(c: Pick<MoveContext, 'sprint' | 'swimming' | 'dragging' | 'airborne'>): number {
-  let speed: number = c.sprint && !c.dragging ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+export function maxSpeed(
+  c: Pick<MoveContext, 'sprint' | 'analogThrottle' | 'swimming' | 'dragging' | 'airborne'>,
+): number {
+  let speed: number;
+  if (c.analogThrottle != null && !c.dragging) {
+    const t = Math.min(1, Math.max(0, c.analogThrottle));
+    speed = PLAYER.touchMinSpeed + (PLAYER.sprintSpeed - PLAYER.touchMinSpeed) * t;
+  } else {
+    speed = c.sprint && !c.dragging ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+  }
   if (c.swimming) speed *= PLAYER.swimFactor;
   if (c.dragging) speed *= PLAYER.dragFactor;
   if (c.airborne) speed *= PLAYER.flapBoost;

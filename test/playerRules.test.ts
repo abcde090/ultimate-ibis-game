@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { PLAYER, maxSpeed, stepMovement, pickAnim, canFlap } from '../src/actors/playerRules';
 
-const base = { sprint: false, swimming: false, dragging: false, airborne: false };
+const base = { sprint: false, analogThrottle: null, swimming: false, dragging: false, airborne: false };
 
-describe('maxSpeed', () => {
+describe('maxSpeed (digital — keyboard/gamepad)', () => {
   test('walk, sprint, swim, drag modifiers', () => {
     expect(maxSpeed(base)).toBe(PLAYER.walkSpeed);
     expect(maxSpeed({ ...base, sprint: true })).toBe(PLAYER.sprintSpeed);
@@ -18,6 +18,43 @@ describe('maxSpeed', () => {
 
   test('airborne boost applies', () => {
     expect(maxSpeed({ ...base, airborne: true })).toBeCloseTo(PLAYER.walkSpeed * PLAYER.flapBoost);
+  });
+});
+
+describe('maxSpeed (analog — touch joystick)', () => {
+  test('speed ramps from the floor at a light push to sprint at the rim', () => {
+    expect(maxSpeed({ ...base, analogThrottle: 0 })).toBeCloseTo(PLAYER.touchMinSpeed);
+    expect(maxSpeed({ ...base, analogThrottle: 1 })).toBeCloseTo(PLAYER.sprintSpeed);
+    const half = maxSpeed({ ...base, analogThrottle: 0.5 });
+    expect(half).toBeGreaterThan(PLAYER.touchMinSpeed);
+    expect(half).toBeLessThan(PLAYER.sprintSpeed);
+  });
+
+  test('pushing further is monotonically faster', () => {
+    const a = maxSpeed({ ...base, analogThrottle: 0.3 });
+    const b = maxSpeed({ ...base, analogThrottle: 0.6 });
+    const c = maxSpeed({ ...base, analogThrottle: 0.9 });
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+  });
+
+  test('a near-full push already beats walk speed (the whole point of the fix)', () => {
+    expect(maxSpeed({ ...base, analogThrottle: 0.7 })).toBeGreaterThan(PLAYER.walkSpeed);
+  });
+
+  test('throttle is clamped to 0..1', () => {
+    expect(maxSpeed({ ...base, analogThrottle: 5 })).toBeCloseTo(PLAYER.sprintSpeed);
+    expect(maxSpeed({ ...base, analogThrottle: -1 })).toBeCloseTo(PLAYER.touchMinSpeed);
+  });
+
+  test('dragging ignores analog throttle and stays slow', () => {
+    expect(maxSpeed({ ...base, analogThrottle: 1, dragging: true }))
+      .toBeCloseTo(PLAYER.walkSpeed * PLAYER.dragFactor);
+  });
+
+  test('swim and flap modifiers still compose with analog', () => {
+    expect(maxSpeed({ ...base, analogThrottle: 1, swimming: true }))
+      .toBeCloseTo(PLAYER.sprintSpeed * PLAYER.swimFactor);
   });
 });
 
