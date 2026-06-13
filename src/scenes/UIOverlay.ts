@@ -31,6 +31,14 @@ export class UIOverlayScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser reuses the scene instance on restart, so reset per-run fields
+    // here — otherwise a previous win leaves `won` true (hiding the touch
+    // controls) and `toastY` drifts.
+    this.won = false;
+    this.toastY = 70;
+    this.district = 'park';
+    this.taskState = null;
+
     this.buildNotepad();
     this.buildHint();
 
@@ -184,6 +192,7 @@ export class UIOverlayScene extends Phaser.Scene {
     void veil; void title; void sub;
 
     this.won = true;
+    this.touchControls.forceHide(); // no live touch buttons during the win screen
     const restart = (): void => this.restartGame();
     this.input.keyboard?.once('keydown-R', restart);
     // Tap anywhere to replay (touch + mouse) — a beat later so the winning

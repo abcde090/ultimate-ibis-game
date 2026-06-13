@@ -10,7 +10,7 @@ import { stickVector, clampThumb } from './stickMath';
 const JOY_RADIUS = 90;
 const JOY_THUMB = 42;
 const LEFT_ZONE_X = 580;  // joystick activates left of here...
-const LEFT_ZONE_Y = 210;  // ...and below here (clear of the notepad)
+const LEFT_ZONE_Y = 272;  // ...and below here (clear of the notepad, which ends ~262)
 
 interface TouchButton {
   action: Action;
@@ -82,6 +82,26 @@ export class TouchControls {
     scene.input.on('pointermove', this.onPointerMove, this);
     scene.input.on('pointerup', this.onPointerUp, this);
     scene.input.on('pointerupoutside', this.onPointerUp, this);
+    // A finger lifted off-screen or interrupted (call, notification) fires
+    // pointercancel, not pointerup — handle it or a held button sticks.
+    scene.input.on('pointercancel', this.onPointerUp, this);
+
+    // This scene restarts on replay/quit; detach so listeners don't pile up
+    // across playthroughs (matches the InputSystem/UIOverlay cleanup).
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.input.off('pointerdown', this.onPointerDown, this);
+      scene.input.off('pointermove', this.onPointerMove, this);
+      scene.input.off('pointerup', this.onPointerUp, this);
+      scene.input.off('pointerupoutside', this.onPointerUp, this);
+      scene.input.off('pointercancel', this.onPointerUp, this);
+    });
+  }
+
+  // Force-hide and release everything (used the instant the game is won, so
+  // a button can't stay live for the frame before update() runs).
+  forceHide(): void {
+    this.container.setVisible(false);
+    this.releaseAll();
   }
 
   private makeButton(
