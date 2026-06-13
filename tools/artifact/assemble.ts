@@ -45,8 +45,8 @@ const html = `<!DOCTYPE html>
 <title>Bin Chicken — An Ibis Mischief Game</title>
 <style>
   html, body { margin: 0; padding: 0; background: #10180f; height: 100%; overflow: hidden; }
-  #app { width: 100vw; height: 100vh; }
-  #app canvas { display: block; margin: 0 auto; }
+  #app { width: 100vw; height: 100vh; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #app canvas { display: block; margin: 0 auto; touch-action: none; }
   #fallback { color: #f0ead2; font-family: Georgia, serif; text-align: center; padding: 80px 20px; }
   #fallback a { color: #e0533d; }
 </style>

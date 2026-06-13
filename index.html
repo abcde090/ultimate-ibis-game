@@ -6,8 +6,10 @@
   <title>Bin Chicken</title>
   <style>
     html, body { margin: 0; padding: 0; background: #10180f; height: 100%; overflow: hidden; }
-    #app { width: 100%; height: 100%; }
-    #app canvas { display: block; margin: 0 auto; }
+    /* touch-action/user-select: let the virtual joystick drag without the
+       page scrolling, zooming, or selecting text under the finger. */
+    #app { width: 100%; height: 100%; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    #app canvas { display: block; margin: 0 auto; touch-action: none; }
   </style>
 </head>
 <body>

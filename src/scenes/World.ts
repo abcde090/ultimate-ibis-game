@@ -204,9 +204,13 @@ export class WorldScene extends Phaser.Scene {
       (b) => Phaser.Math.Distance.Between(p.x, p.y, b.x, b.y) < b.r,
     );
 
-    // Browsers unlock audio on the first real gesture.
-    if (this.input2.isDown('up') || this.input2.isDown('down') || this.input2.isDown('left') ||
-        this.input2.isDown('right') || this.input2.isDown('squawk') || this.input2.isDown('grab')) {
+    // Browsers unlock audio on the first real gesture — keyboard, gamepad, or
+    // any touch-control interaction.
+    const t = this.input2.touch;
+    const touchEngaged = t.active && (t.axisX !== 0 || t.axisY !== 0 || t.sprint || t.squawkDown || t.pressed.size > 0);
+    if (touchEngaged || this.input2.isDown('up') || this.input2.isDown('down') ||
+        this.input2.isDown('left') || this.input2.isDown('right') ||
+        this.input2.isDown('squawk') || this.input2.isDown('grab')) {
       this.audio.resume();
     }
 

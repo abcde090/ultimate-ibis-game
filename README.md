@@ -36,8 +36,12 @@ to open (needs internet for the Phaser CDN), email it, host it anywhere, or past
 it into a Claude HTML artifact for others to play and review.
 
 Notes for reviewers:
-- **Desktop + keyboard.** Click the game once to give it focus, then use the
-  controls below. There are no touch controls, so phones can't play it.
+- **Desktop:** click the game once to give it keyboard focus, then use the
+  controls above.
+- **Phone / touch:** on-screen controls appear automatically — a thumbstick on
+  the left (push to the edge to sprint) and Squawk / Grab / Flap buttons on the
+  right, plus a pause button. Landscape is recommended. On hybrid laptops the
+  touch controls hide the moment you press a physical key.
 - Saves use `localStorage`; in sandboxes that block storage the game still runs,
   it just won't show **Continue** or persist progress.
 

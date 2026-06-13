@@ -24,7 +24,7 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  input: { gamepad: true },
+  input: { gamepad: true, activePointers: 3 }, // joystick + two action buttons at once
   scene: [BootScene, PreloadScene, TitleScene, WorldScene, UIOverlayScene, PauseScene],
 });
 

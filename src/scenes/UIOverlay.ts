@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { DistrictId } from '../world/layoutData';
 import { tasksFor, type TaskState } from '../systems/tasks';
+import { TouchControls } from '../systems/touchControls';
+import type { InputSystem } from '../systems/input';
 
 const DISTRICT_TITLES: Record<DistrictId, string> = {
   park: 'Park Lawn',
@@ -19,6 +21,10 @@ export class UIOverlayScene extends Phaser.Scene {
   private toastY = 70;
   private district: DistrictId = 'park';
   private taskState: TaskState | null = null;
+  private hint!: Phaser.GameObjects.Text;
+  private touchControls!: TouchControls;
+  private input2!: InputSystem;
+  private won = false;
 
   constructor() {
     super('UIOverlay');
@@ -46,6 +52,9 @@ export class UIOverlayScene extends Phaser.Scene {
     });
     world.events.on('toast', (text: string) => this.toast(text));
     world.events.on('won', () => this.showWin());
+
+    this.input2 = (world as unknown as { input2: InputSystem }).input2;
+    this.touchControls = new TouchControls(this, this.input2);
 
     if (import.meta.env.DEV) {
       this.fpsText = this.add
@@ -114,7 +123,7 @@ export class UIOverlayScene extends Phaser.Scene {
   }
 
   private buildHint(): void {
-    this.add
+    this.hint = this.add
       .text(640, 712, 'WASD waddle   Shift sprint   Space squawk   E grab/drop/peck/drag   F flap-hop', {
         fontFamily: 'Verdana, sans-serif', fontSize: '12px', color: '#f0ead2',
         backgroundColor: 'rgba(20,30,20,0.65)', padding: { x: 12, y: 5 },
@@ -122,6 +131,12 @@ export class UIOverlayScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setScrollFactor(0)
       .setDepth(100);
+  }
+
+  private restartGame(): void {
+    this.scene.stop('World');
+    this.scene.stop();
+    this.scene.start('World', { continue: false });
   }
 
   private toast(text: string): void {
@@ -160,18 +175,21 @@ export class UIOverlayScene extends Phaser.Scene {
         fontFamily: 'Georgia, serif', fontSize: '20px', color: '#d8c98a', align: 'center',
       })
       .setOrigin(0.5).setScrollFactor(0).setDepth(301);
+    const touchOn = this.input2?.touch.active === true;
     const hint = this.add
-      .text(640, 470, 'Press R to cause more mischief', {
+      .text(640, 470, touchOn ? 'Tap anywhere to cause more mischief' : 'Press R — or tap — to cause more mischief', {
         fontFamily: 'Verdana, sans-serif', fontSize: '14px', color: '#f0ead2',
       })
       .setOrigin(0.5).setScrollFactor(0).setDepth(301);
     void veil; void title; void sub;
 
-    this.input.keyboard?.once('keydown-R', () => {
-      this.scene.stop('World');
-      this.scene.stop();
-      this.scene.start('World', { continue: false });
-    });
+    this.won = true;
+    const restart = (): void => this.restartGame();
+    this.input.keyboard?.once('keydown-R', restart);
+    // Tap anywhere to replay (touch + mouse) — a beat later so the winning
+    // tap/click doesn't immediately restart.
+    this.time.delayedCall(500, () => this.input.once('pointerdown', restart));
+
     const reduced = (this.scene.get('World') as { settings?: { current: { reducedMotion: boolean } } })
       .settings?.current.reducedMotion;
     if (reduced) hint.setAlpha(0.7);
@@ -180,5 +198,9 @@ export class UIOverlayScene extends Phaser.Scene {
 
   override update(): void {
     this.fpsText?.setText(`${Math.round(this.game.loop.actualFps)} fps`);
+    const paused = this.scene.isActive('Pause');
+    this.touchControls.update({ paused, won: this.won });
+    // The keyboard hint is noise on touch; the on-screen buttons are labelled.
+    this.hint.setVisible(!(this.input2?.touch.active === true));
   }
 }
