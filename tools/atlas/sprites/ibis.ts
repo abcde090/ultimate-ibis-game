@@ -7,6 +7,9 @@ const W = 64;
 const H = 72;
 const CX = 32;
 const FOOT = 68; // anchor line
+// A real ibis stands well below a person; scale the whole bird down around
+// its feet so it reads as ~0.6x an adult human's height (it was ~0.9x).
+const SCALE = 0.72;
 
 interface Pose {
   legL: number;   // forward/back offset of left leg foot, px
@@ -79,7 +82,8 @@ function ibisBody(p: Pose): string {
 }
 
 function frame(name: string, p: Pose): SpriteFrame {
-  return { name, w: W, h: H, svg: doc(W, H, ibisBody(p)) };
+  const scaled = `<g transform="translate(${CX} ${FOOT}) scale(${SCALE}) translate(${-CX} ${-FOOT})">${ibisBody(p)}</g>`;
+  return { name, w: W, h: H, svg: doc(W, H, scaled) };
 }
 
 export function ibisFrames(): SpriteFrame[] {
@@ -111,6 +115,7 @@ export function ibisFrames(): SpriteFrame[] {
 }
 
 // Beak-tip offset from sprite anchor (left-facing); the game mirrors for
-// right-facing. Items carried in the beak attach here.
-export const IBIS_BEAK_OFFSET = { x: -24, y: -44 };
+// right-facing. Items carried in the beak attach here. Scaled with the bird
+// (keep in sync with src/world/spriteMeta.ts, which the game imports).
+export const IBIS_BEAK_OFFSET = { x: -24 * SCALE, y: -44 * SCALE };
 export { W as IBIS_W, H as IBIS_H };

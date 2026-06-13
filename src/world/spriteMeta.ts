@@ -2,8 +2,9 @@
 // (The baker imports from here so art and gameplay can't drift apart.)
 
 // Beak tip offset from the ibis sprite anchor (bottom-centre), left-facing.
-// Mirror x for right-facing. Carried items attach here.
-export const IBIS_BEAK_OFFSET = { x: -24, y: -44 } as const;
+// Mirror x for right-facing. Carried items attach here. These track the ibis
+// art scale (0.72) in tools/atlas/sprites/ibis.ts: base (-24,-44) x 0.72.
+export const IBIS_BEAK_OFFSET = { x: -17, y: -32 } as const;
 
 // Hand offset for humans carrying items home.
 export const HUMAN_HAND_OFFSET = { x: -14, y: -52 } as const;
