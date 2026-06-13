@@ -1,5 +1,7 @@
 # Bin Chicken 🦩🗑️
 
+### ▶ Play it now: **https://abcde090.github.io/ultimate-ibis-game/**
+
 **An Ibis Mischief Game.** It is a lovely morning in Maggee Bay Reserve, and
 you are a horrible ibis.
 
