@@ -7,9 +7,9 @@ const W = 64;
 const H = 72;
 const CX = 32;
 const FOOT = 68; // anchor line
-// A real ibis stands well below a person; scale the whole bird down around
-// its feet so it reads as ~0.6x an adult human's height (it was ~0.9x).
-const SCALE = 0.72;
+// Final size trim around the feet (the body is already drawn slim/small);
+// lands the bird at roughly half an adult human's height.
+const SCALE = 0.85;
 
 interface Pose {
   legL: number;   // forward/back offset of left leg foot, px
@@ -20,63 +20,64 @@ interface Pose {
   swim: boolean;
 }
 
+// A slender wading bird, not a goose: small horizontal body, long thin
+// legs, neck carried up-and-forward. Authored facing left.
 function ibisBody(p: Pose): string {
-  const by = FOOT - 34 - p.bob + (p.swim ? 14 : 0); // body centre y
+  const bx = 36;                                  // body centre x (toward the rear)
+  const by = FOOT - 22 - p.bob + (p.swim ? 11 : 0); // body centre y
   const parts: string[] = [];
 
   if (!p.swim) {
-    parts.push(shadow(CX, FOOT, 17));
-    // Legs
-    parts.push(line(CX - 5, by + 9, CX - 5 + p.legL, FOOT, '#3a3a3a', 2.6));
-    parts.push(line(CX + 6, by + 9, CX + 6 + p.legR, FOOT, '#3a3a3a', 2.6));
+    parts.push(shadow(CX, FOOT, 13));
+    // Legs — long and thin.
+    parts.push(line(33, by + 5, 33 + p.legL, FOOT, '#3a3a3a', 1.8));
+    parts.push(line(40, by + 5, 40 + p.legR, FOOT, '#3a3a3a', 1.8));
   } else {
-    // Water line ripple
-    parts.push(ellipse(CX, by + 12, 22, 5, 'rgba(255,255,255,0.45)'));
+    parts.push(ellipse(CX, by + 8, 17, 4, 'rgba(255,255,255,0.45)'));
   }
 
-  // Body
-  parts.push(ellipse(CX + 2, by, 17, 11, PAL.ibisBody, { stroke: PAL.outline, rot: -7 }));
-  // Wing detail
-  if (p.wings === 'folded') {
-    parts.push(ellipse(CX + 6, by - 2, 10, 6.5, PAL.ibisShade, { rot: -10 }));
-  } else {
-    const lift = p.wings === 'up' ? -16 : -6;
-    parts.push(path(
-      `M ${CX + 2} ${by - 4} Q ${CX + 18} ${by + lift} ${CX + 28} ${by + lift + 4}`
-      + ` Q ${CX + 16} ${by + 4} ${CX + 2} ${by + 2} Z`,
-      PAL.ibisBody, { stroke: PAL.outline, sw: 1 },
-    ));
-    // Black wing tips
-    parts.push(path(
-      `M ${CX + 20} ${by + lift + 1} Q ${CX + 27} ${by + lift + 2} ${CX + 28} ${by + lift + 4}`
-      + ` L ${CX + 22} ${by + lift + 6} Z`,
-      PAL.ink,
-    ));
-  }
-  // Black tail feathers
+  // Black tail plumes at the rear.
   parts.push(path(
-    `M ${CX + 13} ${by - 3} Q ${CX + 26} ${by - 3} ${CX + 24} ${by + 7} Q ${CX + 17} ${by + 5} ${CX + 11} ${by + 6} Z`,
+    `M ${bx + 8} ${by - 3} Q ${bx + 19} ${by - 5} ${bx + 17} ${by + 4} Q ${bx + 11} ${by + 3} ${bx + 6} ${by + 4} Z`,
     PAL.ink,
   ));
 
-  // Neck: S-curve up to head
-  const hx = CX - 15;
-  const hy = by - 24;
-  parts.push(path(
-    `M ${CX - 9} ${by - 3} Q ${hx - 1} ${by - 13} ${hx + 1} ${hy + 3}`,
-    'none', { stroke: PAL.ibisBody, sw: 7 },
-  ));
-  // Bald black head
-  parts.push(ellipse(hx, hy, 6.5, 6, PAL.ink, { rot: 12 }));
-  // Beak: long down-curve
-  if (p.beakOpen) {
-    parts.push(path(`M ${hx - 5} ${hy - 1} Q ${hx - 19} ${hy + 1} ${hx - 23} ${hy + 11}`, 'none', { stroke: PAL.ink, sw: 3 }));
-    parts.push(path(`M ${hx - 5} ${hy + 2} Q ${hx - 15} ${hy + 9} ${hx - 16} ${hy + 19}`, 'none', { stroke: PAL.ink, sw: 3 }));
+  // Body — slim horizontal oval.
+  parts.push(ellipse(bx, by, 13, 8, PAL.ibisBody, { stroke: PAL.outline, rot: -5 }));
+  // Wing.
+  if (p.wings === 'folded') {
+    parts.push(ellipse(bx + 1, by - 1, 8.5, 4.5, PAL.ibisShade, { rot: -7 }));
   } else {
-    parts.push(path(`M ${hx - 5} ${hy} Q ${hx - 21} ${hy + 3} ${hx - 24} ${hy + 16}`, 'none', { stroke: PAL.ink, sw: 4 }));
+    const lift = p.wings === 'up' ? -14 : -5;
+    parts.push(path(
+      `M ${bx} ${by - 3} Q ${bx + 13} ${by + lift} ${bx + 21} ${by + lift + 3}`
+      + ` Q ${bx + 11} ${by + 3} ${bx} ${by + 1} Z`,
+      PAL.ibisBody, { stroke: PAL.outline, sw: 1 },
+    ));
+    parts.push(path(
+      `M ${bx + 14} ${by + lift + 1} Q ${bx + 20} ${by + lift + 2} ${bx + 21} ${by + lift + 3} L ${bx + 15} ${by + lift + 5} Z`,
+      PAL.ink,
+    ));
   }
-  // Eye
-  parts.push(ellipse(hx - 0.5, hy - 1.5, 1.4, 1.4, '#e8e4d8'));
+
+  // Neck — slim, from the body's front up and slightly forward to the head.
+  const hx = 19;
+  const hy = by - 15;
+  parts.push(path(
+    `M ${bx - 9} ${by - 2} Q ${bx - 17} ${by - 8} ${hx + 2} ${hy + 3}`,
+    'none', { stroke: PAL.ibisBody, sw: 5 },
+  ));
+  // Bald black head.
+  parts.push(ellipse(hx, hy, 5, 4.5, PAL.ink, { rot: 10 }));
+  // Long, down-curved black bill.
+  if (p.beakOpen) {
+    parts.push(path(`M ${hx - 4} ${hy - 1} Q ${hx - 14} ${hy + 1} ${hx - 17} ${hy + 11}`, 'none', { stroke: PAL.ink, sw: 2.6 }));
+    parts.push(path(`M ${hx - 4} ${hy + 2} Q ${hx - 11} ${hy + 8} ${hx - 12} ${hy + 17}`, 'none', { stroke: PAL.ink, sw: 2.6 }));
+  } else {
+    parts.push(path(`M ${hx - 4} ${hy} Q ${hx - 16} ${hy + 3} ${hx - 18} ${hy + 15}`, 'none', { stroke: PAL.ink, sw: 3.2 }));
+  }
+  // Eye.
+  parts.push(ellipse(hx - 0.5, hy - 1, 1.2, 1.2, '#e8e4d8'));
 
   return parts.join('');
 }
@@ -115,7 +116,8 @@ export function ibisFrames(): SpriteFrame[] {
 }
 
 // Beak-tip offset from sprite anchor (left-facing); the game mirrors for
-// right-facing. Items carried in the beak attach here. Scaled with the bird
-// (keep in sync with src/world/spriteMeta.ts, which the game imports).
-export const IBIS_BEAK_OFFSET = { x: -24 * SCALE, y: -44 * SCALE };
-export { W as IBIS_W, H as IBIS_H };
+// right-facing. Items carried in the beak attach here. Derived from the bill
+// tip of the design above after the SCALE wrap (keep in sync with
+// src/world/spriteMeta.ts, which the game actually imports).
+export const IBIS_BEAK_OFFSET = { x: -26, y: -23 };
+export { W as IBIS_W, H as IBIS_H, SCALE as IBIS_SCALE };

@@ -6,7 +6,7 @@ import { TitleScene } from './scenes/Title';
 import { PauseScene } from './scenes/Pause';
 import { UIOverlayScene } from './scenes/UIOverlay';
 
-export const GAME_VERSION = '2.1.1';
+export const GAME_VERSION = '2.1.2';
 export const DESIGN_WIDTH = 1280;
 export const DESIGN_HEIGHT = 720;
 
