@@ -11,6 +11,7 @@ export interface Settings {
   sfxVolume: number;
   ambienceVolume: number;
   reducedMotion: boolean;
+  tasksHidden: boolean;   // collapse the to-do notepad so it doesn't cover the map
   bindings: KeyBindings;
 }
 
@@ -20,6 +21,7 @@ export function makeSettings(): Settings {
     sfxVolume: 1,
     ambienceVolume: 0.8,
     reducedMotion: false,
+    tasksHidden: false,
     bindings: structuredClone(DEFAULT_BINDINGS),
   };
 }
@@ -44,6 +46,7 @@ export class SettingsSystem {
         sfxVolume: clamp01(data.sfxVolume, fresh.sfxVolume),
         ambienceVolume: clamp01(data.ambienceVolume, fresh.ambienceVolume),
         reducedMotion: data.reducedMotion === true,
+        tasksHidden: data.tasksHidden === true,
         bindings: sanitizeBindings(data.bindings, fresh.bindings),
       };
     } catch {

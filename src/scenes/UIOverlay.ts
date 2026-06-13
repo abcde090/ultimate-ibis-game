@@ -3,6 +3,7 @@ import type { DistrictId } from '../world/layoutData';
 import { tasksFor, type TaskState } from '../systems/tasks';
 import { TouchControls } from '../systems/touchControls';
 import type { InputSystem } from '../systems/input';
+import type { SettingsSystem } from '../systems/settings';
 
 const DISTRICT_TITLES: Record<DistrictId, string> = {
   park: 'Park Lawn',
@@ -24,7 +25,12 @@ export class UIOverlayScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private touchControls!: TouchControls;
   private input2!: InputSystem;
+  private settings!: SettingsSystem;
   private won = false;
+  private notepadBg!: Phaser.GameObjects.Graphics;
+  private notepadRule!: Phaser.GameObjects.Graphics;
+  private caret!: Phaser.GameObjects.Text;
+  private tasksHidden = false;
 
   constructor() {
     super('UIOverlay');
@@ -62,7 +68,10 @@ export class UIOverlayScene extends Phaser.Scene {
     world.events.on('won', () => this.showWin());
 
     this.input2 = (world as unknown as { input2: InputSystem }).input2;
+    this.settings = (world as unknown as { settings: SettingsSystem }).settings;
+    this.tasksHidden = this.settings.current.tasksHidden;
     this.touchControls = new TouchControls(this, this.input2);
+    this.applyTasksHidden();
 
     if (import.meta.env.DEV) {
       this.fpsText = this.add
@@ -73,18 +82,20 @@ export class UIOverlayScene extends Phaser.Scene {
   }
 
   private buildNotepad(): void {
-    const bg = this.add.graphics();
-    bg.fillStyle(0xfdf6e3, 0.96);
-    bg.fillRoundedRect(0, 0, 268, 248, 8);
-    bg.lineStyle(2, 0x8a8270, 0.6);
-    bg.strokeRoundedRect(0, 0, 268, 248, 8);
+    this.notepadBg = this.add.graphics();
+    this.drawNotepadBg(268, 248);
 
     this.notepadTitle = this.add.text(16, 12, 'To-Do — Park Lawn', {
       fontFamily: 'Georgia, serif', fontSize: '17px', fontStyle: 'bold', color: '#2b2b2b',
     });
-    const rule = this.add.graphics();
-    rule.lineStyle(2, 0x2b2b2b, 0.85);
-    rule.lineBetween(16, 38, 252, 38);
+    // Caret toggle (▾ open / ▸ collapsed), top-right of the notepad.
+    this.caret = this.add
+      .text(244, 11, '▾', { fontFamily: 'Verdana, sans-serif', fontSize: '17px', color: '#2b2b2b' })
+      .setOrigin(0.5, 0);
+
+    this.notepadRule = this.add.graphics();
+    this.notepadRule.lineStyle(2, 0x2b2b2b, 0.85);
+    this.notepadRule.lineBetween(16, 38, 252, 38);
 
     this.taskTexts = [];
     for (let i = 0; i < 8; i++) {
@@ -96,9 +107,43 @@ export class UIOverlayScene extends Phaser.Scene {
       );
     }
 
-    this.notepad = this.add.container(14, 14, [bg, this.notepadTitle, rule, ...this.taskTexts]);
+    // A transparent hit-zone over the title bar toggles the list — easy to
+    // tap on a phone (and it sits clear of the joystick / right buttons).
+    const toggle = this.add.rectangle(0, 0, 268, 40, 0xffffff, 0).setOrigin(0, 0);
+    toggle.setInteractive({ useHandCursor: true });
+    toggle.on('pointerdown', () => this.toggleTasks());
+
+    this.notepad = this.add.container(14, 14, [
+      this.notepadBg, this.notepadTitle, this.caret, this.notepadRule, ...this.taskTexts, toggle,
+    ]);
     this.notepad.setScrollFactor(0).setDepth(100);
     this.notepad.setAngle(-1.2);
+    this.refreshNotepad();
+  }
+
+  private drawNotepadBg(w: number, h: number): void {
+    this.notepadBg.clear();
+    this.notepadBg.fillStyle(0xfdf6e3, 0.96);
+    this.notepadBg.fillRoundedRect(0, 0, w, h, 8);
+    this.notepadBg.lineStyle(2, 0x8a8270, 0.6);
+    this.notepadBg.strokeRoundedRect(0, 0, w, h, 8);
+  }
+
+  private toggleTasks(): void {
+    this.tasksHidden = !this.tasksHidden;
+    this.settings.current.tasksHidden = this.tasksHidden;
+    this.settings.save();
+    this.applyTasksHidden();
+  }
+
+  // Collapse to a small "▸ To-Do" tab, or expand to the full list.
+  private applyTasksHidden(): void {
+    const hidden = this.tasksHidden;
+    this.caret.setText(hidden ? '▸' : '▾');
+    this.notepadRule.setVisible(!hidden);
+    for (const t of this.taskTexts) t.setVisible(!hidden);
+    this.drawNotepadBg(hidden ? 132 : 268, hidden ? 40 : 248);
+    this.caret.setX(hidden ? 110 : 244);
     this.refreshNotepad();
   }
 
@@ -106,7 +151,7 @@ export class UIOverlayScene extends Phaser.Scene {
     const tasks = tasksFor(this.district);
     const completed = this.taskState?.completed ?? [];
     const unlocked = this.taskState?.unlockedDistricts ?? ['park'];
-    this.notepadTitle.setText(`To-Do — ${DISTRICT_TITLES[this.district]}`);
+    this.notepadTitle.setText(this.tasksHidden ? 'To-Do' : `To-Do — ${DISTRICT_TITLES[this.district]}`);
 
     if (!unlocked.includes(this.district)) {
       for (const [i, text] of this.taskTexts.entries()) {
@@ -207,6 +252,11 @@ export class UIOverlayScene extends Phaser.Scene {
 
   override update(): void {
     this.fpsText?.setText(`${Math.round(this.game.loop.actualFps)} fps`);
+    // Keep the notepad in sync with the pause-menu toggle.
+    if (this.settings && this.settings.current.tasksHidden !== this.tasksHidden) {
+      this.tasksHidden = this.settings.current.tasksHidden;
+      this.applyTasksHidden();
+    }
     const paused = this.scene.isActive('Pause');
     this.touchControls.update({ paused, won: this.won });
     // The keyboard hint is noise on touch; the on-screen buttons are labelled.

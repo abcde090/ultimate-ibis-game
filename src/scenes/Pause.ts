@@ -26,24 +26,28 @@ export class PauseScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.rows = [];
-    this.addRow(230, () => 'Resume', () => this.resume());
-    this.addRow(290, () => `Master volume  ◂ ${pct(this.settings.current.masterVolume)} ▸`, (dir) => {
+    this.addRow(216, () => 'Resume', () => this.resume());
+    this.addRow(272, () => `Master volume  ◂ ${pct(this.settings.current.masterVolume)} ▸`, (dir) => {
       this.settings.current.masterVolume = step(this.settings.current.masterVolume, dir);
       this.settings.save();
     });
-    this.addRow(340, () => `Sound effects  ◂ ${pct(this.settings.current.sfxVolume)} ▸`, (dir) => {
+    this.addRow(320, () => `Sound effects  ◂ ${pct(this.settings.current.sfxVolume)} ▸`, (dir) => {
       this.settings.current.sfxVolume = step(this.settings.current.sfxVolume, dir);
       this.settings.save();
     });
-    this.addRow(390, () => `Ambience  ◂ ${pct(this.settings.current.ambienceVolume)} ▸`, (dir) => {
+    this.addRow(368, () => `Ambience  ◂ ${pct(this.settings.current.ambienceVolume)} ▸`, (dir) => {
       this.settings.current.ambienceVolume = step(this.settings.current.ambienceVolume, dir);
       this.settings.save();
     });
-    this.addRow(440, () => `Reduced motion: ${this.settings.current.reducedMotion ? 'ON' : 'OFF'}`, () => {
+    this.addRow(416, () => `Reduced motion: ${this.settings.current.reducedMotion ? 'ON' : 'OFF'}`, () => {
       this.settings.current.reducedMotion = !this.settings.current.reducedMotion;
       this.settings.save();
     });
-    this.addRow(510, () => (this.confirmRestart ? 'Really restart? (click again)' : 'Restart game'), () => {
+    this.addRow(464, () => `To-do list: ${this.settings.current.tasksHidden ? 'HIDDEN' : 'SHOWN'}`, () => {
+      this.settings.current.tasksHidden = !this.settings.current.tasksHidden;
+      this.settings.save(); // UIOverlay polls this and updates the notepad live
+    });
+    this.addRow(524, () => (this.confirmRestart ? 'Really restart? (click again)' : 'Restart game'), () => {
       if (!this.confirmRestart) {
         this.confirmRestart = true;
         this.refreshRows();
@@ -55,7 +59,7 @@ export class PauseScene extends Phaser.Scene {
       this.scene.stop();
       this.scene.start('World', { continue: false });
     });
-    this.addRow(560, () => 'Quit to title', () => {
+    this.addRow(572, () => 'Quit to title', () => {
       this.scene.stop('UIOverlay');
       this.scene.stop('World');
       this.scene.stop();
